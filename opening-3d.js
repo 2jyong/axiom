@@ -148,7 +148,8 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
     );
     camera.lookAt((portrait?-.4:-.25)*(1-centerView),-.25*(1-centerView),.35-.2*centerView);
     const opening=progress(t,reducedMotion?.45:5.38,reducedMotion?1.4:6.72);
-    left.position.x=-opening*12;right.position.x=opening*12;
+    const panelTravel=portrait?2.2:5;
+    left.position.x=-opening*panelTravel;right.position.x=opening*panelTravel;
     const unwind=progress(t,1.35,3.15);const lift=unwind*1.42;
     const withdraw=progress(t,3.35,4.5)*9;
     const approach=(1-progress(t,.18,1.05))*4.1;
