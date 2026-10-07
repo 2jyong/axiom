@@ -21,7 +21,7 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
   element.prepend(renderer.domElement);
   const scene=new THREE.Scene();
   const camera=new THREE.PerspectiveCamera(37,1,.1,90);
-  const materials=new Set(), geometries=new Set(), textures=new Set();
+  const materials=new Set(), geometries=new Set(), textures=new Set(),doorInstances=[];
   const material=properties=>{const value=new THREE.MeshStandardMaterial(properties);materials.add(value);return value;};
   const mesh=(geometry,mat,parent,x=0,y=0,z=0)=>{geometries.add(geometry);const value=new THREE.Mesh(geometry,mat);value.position.set(x,y,z);value.castShadow=true;value.receiveShadow=true;parent.add(value);return value;};
   const group=parent=>{const value=new THREE.Group();parent.add(value);return value;};
@@ -55,14 +55,16 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
     const texture=new THREE.CanvasTexture(canvas);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());textures.add(texture);return texture;
   }
   const brushed=surfaceTexture('grain',1024),roughness=surfaceTexture('rough'),polymer=surfaceTexture('polymer'),radial=surfaceTexture('radial');
-  const plateMetal=material({color:0x858c8e,metalness:1,roughness:.36,bumpMap:brushed,bumpScale:.00008,roughnessMap:roughness,envMapIntensity:.75});
+  const plateMetal=material({color:0x414b50,metalness:.35,roughness:.76,bumpMap:polymer,bumpScale:.001,roughnessMap:roughness,envMapIntensity:.45});
+  const doorTrim=material({color:0x657078,metalness:.7,roughness:.57,bumpMap:brushed,bumpScale:.0003,envMapIntensity:.6});
+  const doorPanel=material({color:0x343e44,metalness:.32,roughness:.8,bumpMap:polymer,bumpScale:.0008,envMapIntensity:.4});
   const brightSteel=material({color:0xc4c9ca,metalness:1,roughness:.22,envMapIntensity:1});
   const turnedSteel=material({color:0xa2a9aa,metalness:1,roughness:.3,bumpMap:brushed,bumpScale:.0005,roughnessMap:roughness});
   const machinedFace=material({color:0xb5bcbd,metalness:1,roughness:.28,bumpMap:radial,bumpScale:.0007});
-  const blackSteel=material({color:0x24282b,metalness:.95,roughness:.32});
-  const rubber=material({color:0x101214,metalness:0,roughness:.86,bumpMap:polymer,bumpScale:.002});
-  const shell=material({color:0xc38828,metalness:0,roughness:.43,bumpMap:polymer,bumpScale:.001});
-  const darkShell=material({color:0x24272a,metalness:0,roughness:.5,bumpMap:polymer,bumpScale:.001});
+  const blackSteel=material({color:0x24282b,metalness:.85,roughness:.46});
+  const rubber=material({color:0x101214,metalness:0,roughness:.9,bumpMap:polymer,bumpScale:.0015,envMapIntensity:.35});
+  const shell=material({color:0xb47a25,metalness:0,roughness:.76,bumpMap:polymer,bumpScale:.0012,envMapIntensity:.4});
+  const darkShell=material({color:0x24272a,metalness:0,roughness:.79,bumpMap:polymer,bumpScale:.001,envMapIntensity:.4});
   const socketDark=material({color:0x15191b,metalness:.8,roughness:.48});
 
   // Bake a studio with broad softboxes once; the animation only samples its map.
@@ -100,6 +102,56 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
     plateGeometry.translate(0,0,-.26);
     const uv=plateGeometry.getAttribute('uv');for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)/8,uv.getY(i)/8);
     mesh(plateGeometry,plateMetal,plate);
+  }
+
+  // Folded edge channels and pressed panels belong to each sliding door leaf.
+  const doorDetails=[];
+  const doorBoxGeometry=new THREE.BoxGeometry(1,1,1);
+  const doorBoltGeometry=new THREE.CylinderGeometry(.028,.028,.018,12);doorBoltGeometry.rotateX(Math.PI/2);
+  geometries.add(doorBoxGeometry);geometries.add(doorBoltGeometry);
+  const doorBatchParts=new Map();
+  function doorBox(parent,mat,z){const value=new THREE.Object3D();value.position.z=z;if(!doorBatchParts.has(parent))doorBatchParts.set(parent,new Map());const batches=doorBatchParts.get(parent);if(!batches.has(mat))batches.set(mat,[]);batches.get(mat).push(value);return value;}
+  for(const [door,sign] of [[left,-1],[right,1]]){
+    const panel=doorBox(door,doorPanel,.014),outer=doorBox(door,doorTrim,.071);
+    const top=doorBox(door,doorTrim,.071),bottom=doorBox(door,doorTrim,.071);
+    const innerTop=doorBox(door,doorTrim,.057),innerBottom=doorBox(door,doorTrim,.057);
+    const panelEdge=doorBox(door,rubber,.017),panelStile=doorBox(door,doorTrim,.062);
+    const gasketTop=doorBox(door,rubber,.019),gasketBottom=doorBox(door,rubber,.019);
+    const reinforcement=doorBox(door,doorTrim,.035);
+    const pull=group(door);
+    roundedBox(pull,.26,.86,.035,.025,rubber,0,0,.057).castShadow=false;
+    roundedBox(pull,.19,.76,.025,.018,doorTrim,0,0,.081).castShadow=false;
+    roundedBox(pull,.14,.65,.02,.015,socketDark,0,0,.098).castShadow=false;
+    roundedBox(pull,.063,.61,.085,.012,doorTrim,.033,0,.12);
+    const bolts=[];
+    for(let i=0;i<4;i++){const bolt=new THREE.Object3D();bolt.position.z=.15;bolts.push(bolt);}
+    const batches=[...doorBatchParts.get(door)].map(([mat,parts])=>({mat,parts,geometry:doorBoxGeometry}));batches.push({mat:turnedSteel,parts:bolts,geometry:doorBoltGeometry});
+    for(const batch of batches){batch.instance=new THREE.InstancedMesh(batch.geometry,batch.mat,batch.parts.length);batch.instance.receiveShadow=true;door.add(batch.instance);doorInstances.push(batch.instance);}
+    doorDetails.push({sign,panel,outer,top,bottom,innerTop,innerBottom,panelEdge,panelStile,gasketTop,gasketBottom,reinforcement,pull,bolts,batches});
+  }
+  function fitDoors(){
+    const portrait=camera.aspect<.8,z=portrait?11.1:7.6;
+    const halfHeight=z*Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*.91;
+    const width=Math.max(1.05,halfHeight*camera.aspect/.91*.94);
+    for(const d of doorDetails){
+      const set=(value,x,y,w,h,depth)=>{value.position.x=d.sign*x;value.position.y=y;value.scale.set(w,h,depth);};
+      const center=(width+.36)/2,panelWidth=width-.36;
+      set(d.panel,center,0,panelWidth,halfHeight*2-.22,.025);
+      set(d.panelEdge,.368,0,.045,halfHeight*2-.19,.017);
+      set(d.panelStile,.405,0,.065,halfHeight*2-.19,.068);
+      set(d.outer,width,0,.13,halfHeight*2-.13,.14);
+      set(d.top,(width+.1)/2,halfHeight,width+.03,.13,.14);
+      set(d.bottom,(width+.1)/2,-halfHeight,width+.03,.13,.14);
+      const centralHeight=halfHeight-.685;
+      set(d.innerTop,.13,(halfHeight+.555)/2,.17,centralHeight,.105);
+      set(d.innerBottom,.13,-(halfHeight+.555)/2,.17,centralHeight,.105);
+      set(d.gasketTop,.025,(halfHeight+.58)/2,.038,halfHeight-.58,.034);
+      set(d.gasketBottom,.025,-(halfHeight+.58)/2,.038,halfHeight-.58,.034);
+      set(d.reinforcement,center,-halfHeight*.57,panelWidth-.03,.035,.04);
+      d.pull.position.set(d.sign*Math.max(.69,width*.43),0,0);
+      for(let i=0;i<4;i++)d.bolts[i].position.set(d.sign*(i<2?.13:width),i%2?halfHeight-.11:-halfHeight+.11,.15);
+      for(const batch of d.batches){for(let i=0;i<batch.parts.length;i++){batch.parts[i].updateMatrix();batch.instance.setMatrixAt(i,batch.parts[i].matrix);}batch.instance.instanceMatrix.needsUpdate=true;batch.instance.computeBoundingSphere();}
+    }
   }
 
   const screw=group(scene);
@@ -147,49 +199,57 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
   const torqueTexture=new THREE.CanvasTexture(torqueCanvas);torqueTexture.colorSpace=THREE.SRGBColorSpace;textures.add(torqueTexture);
   const torqueMaterial=material({map:torqueTexture,roughness:.57,metalness:.04});
   cylinder(tool,.372,.372,.14,1.445,torqueMaterial);
-  const bodyProfile=[new THREE.Vector2(.32,1.48),new THREE.Vector2(.43,1.57),new THREE.Vector2(.46,1.82),new THREE.Vector2(.43,2.25),new THREE.Vector2(.36,2.56),new THREE.Vector2(.32,2.62)];
-  const housing=mesh(new THREE.LatheGeometry(bodyProfile,48),shell,tool);housing.rotation.x=Math.PI/2;
-  const bodyRadius=z=>{for(let i=1;i<bodyProfile.length;i++){const a=bodyProfile[i-1],b=bodyProfile[i];if(z<=b.y)return THREE.MathUtils.lerp(a.x,b.x,(z-a.y)/(b.y-a.y));}return bodyProfile.at(-1).x;};
-  // Molded panels follow the curved shell, avoiding intersecting flat overlays.
+  // A chamfered rectangular motor housing with broad, nearly flat molded faces.
+  const bodySections=[[1.48,.31,.3,0,2.7],[1.57,.405,.36,.018,4],[1.73,.455,.395,.035,5],[2.19,.445,.38,.05,5],[2.48,.39,.33,.06,5],[2.62,.355,.3,.06,5]];
+  const signedPower=(value,power)=>Math.sign(value)*Math.pow(Math.abs(value),power);
+  function sectionAt(sections,z){for(let i=1;i<sections.length;i++){const a=sections[i-1],b=sections[i];if(z<=b[0])return a.map((v,k)=>k===0?z:THREE.MathUtils.lerp(v,b[k],clamp((z-a[0])/(b[0]-a[0]),0,1)));}return sections.at(-1);}
+  function sectionPoint(section,angle,offset=0){const [,rx,ry,cy,n]=section;return new THREE.Vector3(signedPower(Math.cos(angle),2/n)*(rx+offset),cy+signedPower(Math.sin(angle),2/n)*(ry+offset),section[0]);}
+  function housingGeometry(sections,cap=false){
+    const positions=[],uv=[],indices=[],segments=48;
+    for(let j=0;j<sections.length;j++){
+      for(let i=0;i<=segments;i++){const p=sectionPoint(sections[j],i/segments*Math.PI*2);positions.push(p.x,p.y,p.z);uv.push(i/segments,j/(sections.length-1));}
+      if(j<sections.length-1)for(let i=0;i<segments;i++){const a=j*(segments+1)+i,b=a+segments+1;indices.push(a,a+1,b,a+1,b+1,b);}
+    }
+    if(cap){const section=sections.at(-1),center=positions.length/3;positions.push(0,section[3],section[0]);uv.push(.5,.5);const row=(sections.length-1)*(segments+1);for(let i=0;i<segments;i++)indices.push(row+i,row+i+1,center);}
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+  }
+  mesh(housingGeometry(bodySections),shell,tool);
+  // All panels, vents and screws follow that same housing surface.
   function shellPatch(angle,halfAngle,zStart,zEnd,offset,mat){
-    const vertices=[],indices=[],uv=[],rows=20,columns=12;
+    const vertices=[],indices=[],uv=[],rows=16,columns=10;
     for(let j=0;j<=rows;j++){
-      const v=j/rows,z=THREE.MathUtils.lerp(zStart,zEnd,v),r=bodyRadius(z)+offset;
-      const edge=Math.min(v,1-v),round=edge<.13?Math.sqrt(Math.max(.001,1-Math.pow(1-edge/.13,2))):1;
-      for(let i=0;i<=columns;i++){const u=i/columns,a=angle+(u*2-1)*halfAngle*round;vertices.push(Math.cos(a)*r,Math.sin(a)*r,z);uv.push(u,v);}
+      const v=j/rows,z=THREE.MathUtils.lerp(zStart,zEnd,v),section=sectionAt(bodySections,z);
+      const edge=Math.min(v,1-v),round=edge<.06?.8+edge/.06*.2:1;
+      for(let i=0;i<=columns;i++){const u=i/columns,a=angle+(u*2-1)*halfAngle*round,p=sectionPoint(section,a,offset);vertices.push(p.x,p.y,p.z);uv.push(u,v);}
       if(j<rows)for(let i=0;i<columns;i++){const a=j*(columns+1)+i,b=a+columns+1;indices.push(a,a+1,b,a+1,b+1,b);}
     }
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();
     const patch=mesh(geometry,mat,tool);patch.castShadow=false;return patch;
   }
-  const rearProfile=[[.34,2.58],[.36,2.63],[.35,2.74],[.32,2.8],[.25,2.84],[0,2.855]].map(v=>new THREE.Vector2(...v));
-  const rearCap=mesh(new THREE.LatheGeometry(rearProfile,48),darkShell,tool);rearCap.rotation.x=Math.PI/2;
-  cylinder(tool,.24,.24,.015,2.856,rubber);
-  for(let i=0;i<5;i++)roundedBox(tool,.29-Math.abs(i-2)*.045,.018,.009,.006,socketDark,0,(i-2)*.057,2.875);
-  cylinder(tool,.44,.44,.032,1.67,rubber);
-  cylinder(tool,.369,.369,.028,2.51,rubber);
-  for(let i=0;i<12;i++)shellPatch(i/12*Math.PI*2,.065,2.36,2.54,.005,rubber);
+  mesh(housingGeometry([[2.615,.357,.302,.06,5],[2.66,.36,.303,.06,5],[2.765,.34,.283,.06,5],[2.8,.31,.255,.06,5]],true),darkShell,tool);
+  roundedBox(tool,.47,.36,.014,.033,rubber,0,.06,2.809);
+  for(let i=0;i<5;i++)roundedBox(tool,.36,.019,.007,.004,socketDark,0,.06+(i-2)*.053,2.82);
+  for(const side of [0,Math.PI])for(let i=0;i<5;i++)shellPatch(side,.14,2.3+i*.046,2.318+i*.046,.007,rubber);
   for(const sign of [-1,1]){
     const sideAngle=sign>0?0:Math.PI;
-    shellPatch(sideAngle,.43,1.7,2.38,.006,darkShell);
-    shellPatch(sideAngle,.35,1.76,2.32,.009,shell);
+    shellPatch(sideAngle,.39,1.71,2.23,.006,darkShell);
+    shellPatch(sideAngle,.32,1.76,2.18,.009,shell);
     for(const z of [1.77,2.33]){
-      const r=bodyRadius(z)+.018,x=Math.sqrt(r*r-.13*.13);
-      const screwHead=mesh(new THREE.CylinderGeometry(.027,.027,.014,16),blackSteel,tool,sign*x,-.13,z);screwHead.rotation.z=sign*Math.acos(-.13/r);
-      roundedBox(tool,.002,.006,.034,.001,socketDark,sign*(x+.009),-.13,z);
+      const section=sectionAt(bodySections,z),p=sectionPoint(section,sideAngle-sign*.08,.018);
+      const screwHead=mesh(new THREE.CylinderGeometry(.025,.025,.012,16),blackSteel,tool,p.x,p.y,p.z);screwHead.rotation.z=sign*Math.PI/2;
+      roundedBox(tool,.002,.006,.031,.001,socketDark,p.x+sign*.008,p.y,p.z);
     }
-    shellPatch(sideAngle,.3,2.4,2.59,.008,rubber);
   }
   for(const sign of [-1,1]){
-    const seamPath=new THREE.CatmullRomCurve3(bodyProfile.map(v=>new THREE.Vector3(0,sign*v.x,v.y)));
-    mesh(new THREE.TubeGeometry(seamPath,28,.0035,4,false),darkShell,tool);
+    const seamPath=new THREE.CatmullRomCurve3(bodySections.map(s=>sectionPoint(s,sign*Math.PI/2,.003)));
+    mesh(new THREE.TubeGeometry(seamPath,24,.003,4,false),darkShell,tool);
   }
   // Loft an ergonomic oval grip: narrower at the fingers and swept toward the pack.
   const gripRings=[[-.25,.2,.28,2.12],[-.38,.235,.265,2.13],[-.53,.212,.226,2.15],[-.7,.19,.208,2.19],[-.9,.185,.22,2.24],[-1.08,.204,.25,2.28],[-1.23,.23,.267,2.3],[-1.3,.235,.27,2.31]];
   const gripVertices=[],gripIndices=[],gripUV=[],gripSegments=36;
   for(let j=0;j<gripRings.length;j++){
     const [y,rx,rz,z]=gripRings[j];
-    for(let i=0;i<=gripSegments;i++){const a=i/gripSegments*Math.PI*2;gripVertices.push(Math.cos(a)*rx,y,z+Math.sin(a)*rz);gripUV.push(i/gripSegments,j/(gripRings.length-1));}
+    for(let i=0;i<=gripSegments;i++){const a=i/gripSegments*Math.PI*2;gripVertices.push(signedPower(Math.cos(a),.55)*rx,y,z+signedPower(Math.sin(a),.55)*rz);gripUV.push(i/gripSegments,j/(gripRings.length-1));}
     if(j<gripRings.length-1)for(let i=0;i<gripSegments;i++){const a=j*(gripSegments+1)+i,b=a+gripSegments+1;gripIndices.push(a,a+1,b,a+1,b+1,b);}
   }
   const gripGeometry=new THREE.BufferGeometry();gripGeometry.setAttribute('position',new THREE.Float32BufferAttribute(gripVertices,3));gripGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(gripUV,2));gripGeometry.setIndex(gripIndices);gripGeometry.computeVertexNormals();
@@ -197,14 +257,14 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
   const spineShape=new THREE.Shape();spineShape.moveTo(-.045,-.34);spineShape.lineTo(.045,-.34);spineShape.lineTo(.04,-1.21);spineShape.quadraticCurveTo(0,-1.26,-.04,-1.21);spineShape.closePath();
   const spineGeometry=new THREE.ExtrudeGeometry(spineShape,{depth:.015,bevelEnabled:true,bevelSize:.012,bevelThickness:.008,bevelSegments:3});
   const spine=mesh(spineGeometry,shell,tool,0,0,2.365);spine.rotation.x=-.15;
-  roundedBox(tool,.2,.16,.25,.055,darkShell,0,-.43,1.8);
-  roundedBox(tool,.13,.08,.31,.035,rubber,0,-.24,2.03);
+  roundedBox(tool,.2,.16,.25,.022,darkShell,0,-.43,1.8);
+  roundedBox(tool,.13,.08,.31,.014,rubber,0,-.24,2.03);
   for(let i=0;i<4;i++){
     const y=-.62-i*.16,z=2.17+i*.043,points=[];
-    for(let j=0;j<=32;j++){const a=j/32*Math.PI*2;points.push(new THREE.Vector3(Math.cos(a)*.2,y,z+Math.sin(a)*.226));}
+    for(let j=0;j<=32;j++){const a=j/32*Math.PI*2;points.push(new THREE.Vector3(signedPower(Math.cos(a),.55)*.2,y,z+signedPower(Math.sin(a),.55)*.226));}
     mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),32,.003,4,false),darkShell,tool);
   }
-  roundedBox(tool,1.02,.4,.78,.08,darkShell,0,-1.46,2.23);
+  roundedBox(tool,1.02,.4,.78,.034,darkShell,0,-1.46,2.23);
   roundedBox(tool,.96,.08,.76,.02,rubber,0,-1.7,2.23);
   roundedBox(tool,.76,.09,.58,.025,shell,0,-1.21,2.23);
   for(const sign of [-1,1]){
@@ -225,9 +285,9 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
   const inspectParams=new URLSearchParams(location.search);
   const reviewFrame=inspectParams.has('intro-frame')?clamp(Number(inspectParams.get('intro-frame')),0,5.2):null;
   let currentTime=reviewFrame??0;
-  function resize(){const width=element.clientWidth,height=element.clientHeight;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();if(element.classList.contains('webgl-ready')){pose(currentTime);renderer.render(scene,camera);}}
+  function resize(){const width=element.clientWidth,height=element.clientHeight;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();fitDoors();if(element.classList.contains('webgl-ready')){pose(currentTime);renderer.render(scene,camera);}}
   resize();addEventListener('resize',resize);
-  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(animationFrame);removeEventListener('resize',resize);key.shadow.dispose();chuckRibs.dispose();headRibs.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());envTarget.dispose();renderer.dispose();renderer.domElement.remove();}
+  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(animationFrame);removeEventListener('resize',resize);key.shadow.dispose();chuckRibs.dispose();headRibs.dispose();doorInstances.forEach(instance=>instance.dispose());geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());envTarget.dispose();renderer.dispose();renderer.domElement.remove();}
   renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();dispose();onComplete();},{once:true});
   function pose(t){
     currentTime=t;
