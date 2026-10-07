@@ -37,25 +37,29 @@ addEventListener('resize', () => { if (innerWidth > 820) closeMenu(); });
 
 const intro = document.getElementById('intro');
 let introTimer;
+let openingController;
 function finishIntro() {
   if (!intro || intro.classList.contains('complete')) return;
   clearTimeout(introTimer);
   intro.classList.add('complete');
   document.body.classList.remove('intro-active');
-  try { sessionStorage.setItem('axiomIntroSeen', '1'); } catch (_) {}
-  setTimeout(() => { intro.classList.remove('play'); intro.setAttribute('aria-hidden', 'true'); }, 450);
+  intro.setAttribute('aria-hidden', 'true');
+  setTimeout(() => openingController?.dispose(), 300);
 }
 if (intro) {
-  let seen = false;
-  try { seen = sessionStorage.getItem('axiomIntroSeen') === '1'; } catch (_) {}
-  if (!reduceMotion && !location.hash && (!seen || new URLSearchParams(location.search).has('intro'))) {
-    document.body.classList.add('intro-active');
-    requestAnimationFrame(() => requestAnimationFrame(() => intro.classList.add('play')));
-    introTimer = setTimeout(finishIntro, 3560);
-  } else {
-    intro.classList.add('complete');
-    intro.setAttribute('aria-hidden', 'true');
-  }
+  document.body.classList.add('intro-active');
+  // Every home load includes the opening on desktop and mobile. A reduced-motion
+  // visitor receives a short steel-panel reveal instead of motor rotation.
+  const reviewingOpening = new URLSearchParams(location.search).has('intro-frame');
+  introTimer = setTimeout(finishIntro, reviewingOpening ? 120000 : 14000);
+  import('./opening-3d.js').then(async module => {
+    if (intro.classList.contains('complete')) return;
+    openingController = await module.playOpening({element:intro,onComplete:finishIntro,reducedMotion:reduceMotion});
+    if (intro.classList.contains('complete')) openingController.dispose();
+  }).catch(() => {
+    intro.classList.add('fallback-exit');
+    setTimeout(finishIntro, 850);
+  });
   document.getElementById('introSkip').addEventListener('click', finishIntro);
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenu(); finishIntro(); } });
