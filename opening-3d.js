@@ -283,7 +283,7 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
 
   let disposed=false,animationFrame=0,start=0,previous=0,frames=0,intervalTotal=0,renderDue=0;
   const inspectParams=new URLSearchParams(location.search);
-  const reviewFrame=inspectParams.has('intro-frame')?clamp(Number(inspectParams.get('intro-frame')),0,5.2):null;
+  const reviewFrame=inspectParams.has('intro-frame')?clamp(Number(inspectParams.get('intro-frame')),0,5.36):null;
   let currentTime=reviewFrame??0;
   function resize(){const width=element.clientWidth,height=element.clientHeight;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();fitDoors();if(element.classList.contains('webgl-ready')){pose(currentTime);renderer.render(scene,camera);}}
   resize();addEventListener('resize',resize);
@@ -293,7 +293,7 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
     currentTime=t;
     // After the screw and driver clear the plate, orbit into the fastener axis.
     // Hold the frontal view briefly before the doors reveal the flat page behind it.
-    const centerView=reducedMotion?1:progress(t,3.32,3.72);
+    const centerView=reducedMotion?1:progress(t,3.32,4.12);
     const portrait=camera.aspect<.8;
     camera.position.set(
       (portrait?6.5:4.6)*(1-centerView),
@@ -301,7 +301,7 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
       (portrait?14.2:9.5)-(portrait?3.1:1.9)*centerView
     );
     camera.lookAt((portrait?-.4:-.25)*(1-centerView),-.25*(1-centerView),.35-.2*centerView);
-    const opening=progress(t,reducedMotion?.45:3.77,reducedMotion?1.4:5.11);
+    const opening=progress(t,reducedMotion?.45:4.17,reducedMotion?1.4:5.27);
     const halfFrame=(portrait?11.1:7.6)*Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*camera.aspect;
     const panelTravel=halfFrame+.8;
     left.position.x=-opening*panelTravel;right.position.x=opening*panelTravel;
@@ -313,8 +313,8 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
     const vibration=t>1.35&&t<2.45?.0015:0;tool.position.x=Math.sin(t*240)*vibration;tool.position.y=Math.cos(t*220)*vibration;
     tool.visible=!reducedMotion&&t<3.32;screw.visible=reducedMotion?opening<.14:t<3.32;
     workLight.intensity=t>1.05&&t<2.65?.65:0;
-    element.style.setProperty('--opening-ui',String(1-progress(t,reducedMotion?.7:3.77,reducedMotion?1.35:4.84)));
-    element.dataset.phase=reducedMotion?'reveal':t<1.05?'approach':t<1.35?'engage':t<2.45?'unscrew':t<3.32?'withdraw':t<3.77?'align':'reveal';
+    element.style.setProperty('--opening-ui',String(1-progress(t,reducedMotion?.7:4.17,reducedMotion?1.35:5.05)));
+    element.dataset.phase=reducedMotion?'reveal':t<1.05?'approach':t<1.35?'engage':t<2.45?'unscrew':t<3.32?'withdraw':t<4.17?'align':'reveal';
   }
   pose(reviewFrame??0);
   if(renderer.compileAsync)await renderer.compileAsync(scene,camera);
@@ -330,7 +330,7 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
     if(previous&&t>.25){const interval=now-previous;intervalTotal+=interval;frames++;if(frames===20&&intervalTotal/frames>25&&pixelRatio>1){pixelRatio=1;renderer.setPixelRatio(pixelRatio);resize();}}
     previous=now;pose(t);renderer.render(scene,camera);
     if(reviewFrame!==null){element.dataset.fps='review';return;}
-    if(t>=(reducedMotion?1.45:5.2)){element.dataset.fps=String(Math.round(frames*1000/intervalTotal));element.dataset.frames=String(frames);onComplete();return;}
+    if(t>=(reducedMotion?1.45:5.36)){element.dataset.fps=String(Math.round(frames*1000/intervalTotal));element.dataset.frames=String(frames);onComplete();return;}
     animationFrame=requestAnimationFrame(tick);
   }
   animationFrame=requestAnimationFrame(tick);
