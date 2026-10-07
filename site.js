@@ -55,7 +55,7 @@ if (intro) {
   // visitor receives a short steel-panel reveal instead of motor rotation.
   const reviewingOpening = new URLSearchParams(location.search).has('intro-frame');
   introTimer = setTimeout(finishIntro, reviewingOpening ? 120000 : 14000);
-  import('./opening-3d.js').then(async module => {
+  import('./opening-3d.js?v=4').then(async module => {
     if (intro.classList.contains('complete')) return;
     openingController = await module.playOpening({element:intro,onComplete:finishIntro,reducedMotion:reduceMotion});
     if (intro.classList.contains('complete')) openingController.dispose();

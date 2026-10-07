@@ -131,14 +131,23 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
 
   let disposed=false,animationFrame=0,start=0,previous=0,frames=0,intervalTotal=0,renderDue=0;
   const inspectParams=new URLSearchParams(location.search);
-  const reviewFrame=inspectParams.has('intro-frame')?clamp(Number(inspectParams.get('intro-frame')),0,5.65):null;
-  function resize(){const width=element.clientWidth,height=element.clientHeight;renderer.setSize(width,height,false);camera.aspect=width/height;
-    const portrait=camera.aspect<.8;camera.position.set(portrait?6.5:4.6,portrait?2.6:2.1,portrait?14.2:9.5);camera.lookAt(portrait?-.4:-.25,-.25,.35);camera.updateProjectionMatrix();}
+  const reviewFrame=inspectParams.has('intro-frame')?clamp(Number(inspectParams.get('intro-frame')),0,6.85):null;
+  function resize(){const width=element.clientWidth,height=element.clientHeight;renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();}
   resize();addEventListener('resize',resize);
   function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(animationFrame);removeEventListener('resize',resize);key.shadow.dispose();chuckRibs.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());envTarget.dispose();renderer.dispose();renderer.domElement.remove();}
   renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();dispose();onComplete();},{once:true});
   function pose(t){
-    const opening=progress(t,reducedMotion?.45:4.25,reducedMotion?1.4:5.65);
+    // After the screw and driver clear the plate, orbit into the fastener axis.
+    // Hold the frontal view briefly before the doors reveal the flat page behind it.
+    const centerView=reducedMotion?1:progress(t,4.55,5.33);
+    const portrait=camera.aspect<.8;
+    camera.position.set(
+      (portrait?6.5:4.6)*(1-centerView),
+      (portrait?2.6:2.1)*(1-centerView),
+      (portrait?14.2:9.5)-(portrait?3.1:1.9)*centerView
+    );
+    camera.lookAt((portrait?-.4:-.25)*(1-centerView),-.25*(1-centerView),.35-.2*centerView);
+    const opening=progress(t,reducedMotion?.45:5.38,reducedMotion?1.4:6.72);
     left.position.x=-opening*12;right.position.x=opening*12;
     const unwind=progress(t,1.35,3.15);const lift=unwind*1.42;
     const withdraw=progress(t,3.35,4.5)*9;
@@ -148,8 +157,8 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
     const vibration=t>1.35&&t<3.15?.002:0;tool.position.x=Math.sin(t*240)*vibration;tool.position.y=Math.cos(t*220)*vibration;
     tool.visible=!reducedMotion&&t<4.55;screw.visible=reducedMotion?opening<.14:t<4.55;
     workLight.intensity=t>1.05&&t<3.35?.7:0;
-    element.style.setProperty('--opening-ui',String(1-progress(t,reducedMotion?.7:4.3,reducedMotion?1.35:5.3)));
-    element.dataset.phase=reducedMotion?'reveal':t<1.1?'approach':t<1.35?'engage':t<3.15?'unscrew':t<4.25?'withdraw':'reveal';
+    element.style.setProperty('--opening-ui',String(1-progress(t,reducedMotion?.7:5.38,reducedMotion?1.35:6.45)));
+    element.dataset.phase=reducedMotion?'reveal':t<1.1?'approach':t<1.35?'engage':t<3.15?'unscrew':t<4.55?'withdraw':t<5.38?'align':'reveal';
   }
   pose(reviewFrame??0);
   if(renderer.compileAsync)await renderer.compileAsync(scene,camera);
@@ -165,7 +174,7 @@ export async function playOpening({ element, onComplete, reducedMotion=false }) 
     if(previous&&t>.25){const interval=now-previous;intervalTotal+=interval;frames++;if(frames===20&&intervalTotal/frames>25&&pixelRatio>1){pixelRatio=1;renderer.setPixelRatio(pixelRatio);resize();}}
     previous=now;pose(t);renderer.render(scene,camera);
     if(reviewFrame!==null){element.dataset.fps='review';return;}
-    if(t>=(reducedMotion?1.45:5.7)){element.dataset.fps=String(Math.round(frames*1000/intervalTotal));element.dataset.frames=String(frames);onComplete();return;}
+    if(t>=(reducedMotion?1.45:6.8)){element.dataset.fps=String(Math.round(frames*1000/intervalTotal));element.dataset.frames=String(frames);onComplete();return;}
     animationFrame=requestAnimationFrame(tick);
   }
   animationFrame=requestAnimationFrame(tick);
