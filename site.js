@@ -38,16 +38,19 @@ addEventListener('resize', () => { if (innerWidth > 820) closeMenu(); });
 const intro = document.getElementById('intro');
 let introTimer;
 let openingController;
+const openingBackground = intro ? [...document.querySelectorAll('.site-header,.mobile-menu,main,.site-footer,.skip-link')] : [];
 function finishIntro() {
   if (!intro || intro.classList.contains('complete')) return;
   clearTimeout(introTimer);
   intro.classList.add('complete');
   document.body.classList.remove('intro-active');
+  openingBackground.forEach(element => { element.inert = false; });
   intro.setAttribute('aria-hidden', 'true');
   setTimeout(() => openingController?.dispose(), 300);
 }
 if (intro) {
   document.body.classList.add('intro-active');
+  openingBackground.forEach(element => { element.inert = true; });
   // Every home load includes the opening on desktop and mobile. A reduced-motion
   // visitor receives a short steel-panel reveal instead of motor rotation.
   const reviewingOpening = new URLSearchParams(location.search).has('intro-frame');
